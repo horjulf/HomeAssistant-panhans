@@ -953,6 +953,8 @@ blueprint:
                   value: not_off_but_min
                 - label: "↕️ Off If Above/Below Room Temperature"
                   value: heat_only_if_below_real_temp
+                - label: "Two-point thermostat"
+                  value: two_point_thermostat
                 - label: "🇫 Fahrenheit"
                   value: fahrenheit
               multiple: true
@@ -1499,6 +1501,7 @@ variables:
   is_not_off_but_min: "{{ 'not_off_but_min' in input_tweaks}}"
   is_heat_only_if_below_real_temp: "{{ 'heat_only_if_below_real_temp' in input_tweaks}}"
   is_fahrenheit: "{{ 'fahrenheit' in input_tweaks}}"
+  is_two_point_thermostat: "{{ 'two_point_thermostat' in input_tweaks}}"
   is_aggressive_mode: "{{ input_aggressive_mode_offset > 0 }}"
 
   is_generic_calibration: "{{ 'generic_calibration' in input_calibration_options}}"
@@ -1524,6 +1527,7 @@ variables:
   # ------------- PRESENCE, SCHEDULER, FROST PROTECTION, WINDOWS, PERSONS --------------
   # ------------------------------------------------------------------------------------
 
+  valve_temp_target_attr: "{{ 'target_temp_low' if is_two_point_thermostat else 'temperature' }}"
   active_party_entity: "{{ input_mode_party | expand | selectattr('state', 'in', ['active','on']) | map(attribute='entity_id') | first | default(none) }}"
   state_mode_party: "{{ active_party_entity != none }}"
   party_temp: >
@@ -1579,7 +1583,7 @@ variables:
     {% set thermostats_off = namespace(r=false) %}
     {% for thermostat in input_trvs %}
       {% set min_temp = state_attr(thermostat,'min_temp') %}
-      {% set current_temp = state_attr(thermostat,'temperature') %}
+      {% set current_temp = state_attr(thermostat, valve_temp_target_attr) %}
       {% if current_temp == min_temp %}
         {% set thermostats_off.r = true %}
       {% endif %}
@@ -2057,7 +2061,7 @@ variables:
       {% for valve in input_trvs %}
 
         {% set current_valve_temp = state_attr(valve, 'current_temperature') | float(20) %}
-        {% set current_valve_target_temp = state_attr(valve, 'temperature') | float(temperature) %}
+        {% set current_valve_target_temp = state_attr(valve, valve_temp_target_attr) | float(temperature) %}
         {% set current_valve_mode = states(valve) %}
         {% set min_temp = state_attr(valve, 'min_temp') | float(5) %}
         {% set max_temp = state_attr(valve, 'max_temp') | float(30) %}
@@ -2589,7 +2593,7 @@ action:
                   thermostat: {{ thermostat }}
                   mode: {{ mode }}
                   new_target: {{ target_temperature }}
-                  current_target: {{ state_attr(thermostat,'temperature') }}
+                  current_target: {{ state_attr(thermostat, valve_temp_target_attr) }}
                 level: !input input_log_level
                 logger: blueprints.panhans.heatingcontrol
 
@@ -2616,12 +2620,13 @@ action:
 
             - if:
                 - condition: template
-                  value_template: "{{ state_attr(thermostat, 'temperature') != target_temperature and mode != 'off' }}"
+                  value_template: "{{ state_attr(thermostat, valve_temp_target_attr) != target_temperature and mode != 'off' }}"
               then:
                 - service: climate.set_temperature
                   data:
                     entity_id: "{{ thermostat }}"
-                    temperature: "{{ target_temperature | float }}"
+                    "{{ valve_temp_target_attr }}": "{{ target_temperature | float }}"
+                    target_temp_high: "{{ state_attr(thermostat, 'max_temp') if is_two_point_thermostat else 'none' }}"
 
                 - delay:
                     hours: "{{ input_service_call_delay.hours }}"
