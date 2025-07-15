@@ -2913,11 +2913,10 @@ variables:
           {% set ref_temp = value_temperature_sensor | float(current_valve_temp) %}
         {% endif %}
 
-        {% if is_heat_only_if_below_real_temp and mode != 'off' %}
-          {% if factor == 1 and (target_temperature + input_aggressive_mode_overrun) <= ref_temp %}
+        {% if is_heat_only_if_below_real_temp %}
+          {% if factor == 1 and ((current_valve_mode != 'off' and ref_temp >= (target_temperature + input_aggressive_mode_overrun)) or (current_valve_mode == 'off' and ref_temp >= target_temperature)) %}
             {% set mode = 'off' %}
-          {% endif %}
-          {% if factor == -1 and (target_temperature - input_aggressive_mode_overrun) >= ref_temp %}
+          {% elif factor == -1 and ((current_valve_mode != 'off' and ref_temp <= (target_temperature - input_aggressive_mode_overrun)) or (current_valve_mode == 'off' and ref_temp <= target_temperature)) %}
             {% set mode = 'off' %}
           {% endif %}
         {% endif %}
