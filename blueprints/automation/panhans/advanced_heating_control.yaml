@@ -2914,9 +2914,16 @@ variables:
         {% endif %}
 
         {% if is_heat_only_if_below_real_temp %}
-          {% if factor == 1 and ((current_valve_mode != 'off' and ref_temp >= (target_temperature + input_aggressive_mode_overrun)) or (current_valve_mode == 'off' and ref_temp >= target_temperature)) %}
-            {% set mode = 'off' %}
-          {% elif factor == -1 and ((current_valve_mode != 'off' and ref_temp <= (target_temperature - input_aggressive_mode_overrun)) or (current_valve_mode == 'off' and ref_temp <= target_temperature)) %}
+          {% if iif(factor == 1,
+            iif(current_valve_mode == 'off',
+              ref_temp >= (target_temperature - input_aggressive_mode_deadband),
+              ref_temp >= (target_temperature + input_aggressive_mode_overrun)
+            ),
+            iif(current_valve_mode == 'off',
+              ref_temp <= (target_temperature + input_aggressive_mode_deadband),
+              ref_temp <= (target_temperature - input_aggressive_mode_overrun)
+            )
+          ) %}
             {% set mode = 'off' %}
           {% endif %}
         {% endif %}
