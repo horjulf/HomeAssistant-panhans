@@ -1000,6 +1000,40 @@ blueprint:
           selector:
             boolean:
 
+        input_aggressive_mode_deadband:
+          name: 😡 Aggressive deadband
+          description: >
+            `aggressive mode` `tweak`
+
+
+            The minimum temperature differential (temperature below the set point) before engaging heat
+
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5
+              step: 0.1
+              mode: slider
+              unit_of_measurement: °C / °F
+
+        input_aggressive_mode_overrun:
+          name: 😡 Aggressive overrun
+          description: >
+            `aggressive mode` `tweak`
+
+
+            The minimum temperature differential (heating beyond the set point) before disengaging heat
+
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5
+              step: 0.1
+              mode: slider
+              unit_of_measurement: °C / °F
+
     # frost protection
     frostprotection_section:
       name: Frost Protection
@@ -2118,6 +2152,8 @@ variables:
   input_aggressive_mode_offset: !input input_aggressive_mode_offset
   input_aggressive_mode_range: !input input_aggressive_mode_range
   input_aggressive_mode_calibration: !input input_aggressive_mode_calibration
+  input_aggressive_mode_deadband: !input input_aggressive_mode_deadband
+  input_aggressive_mode_overrun: !input input_aggressive_mode_overrun
 
   # away mode
   input_away_offset: !input input_away_offset
@@ -2877,8 +2913,13 @@ variables:
           {% set ref_temp = value_temperature_sensor | float(current_valve_temp) %}
         {% endif %}
 
-        {% if is_heat_only_if_below_real_temp and iif(factor == 1, target_temperature <= ref_temp, target_temperature >= ref_temp) %}
-          {% set mode = 'off' %}
+        {% if is_heat_only_if_below_real_temp and mode != 'off' %}
+          {% if factor == 1 and (target_temperature + input_aggressive_mode_overrun) <= ref_temp %}
+            {% set mode = 'off' %}
+          {% endif %}
+          {% if factor == -1 and (target_temperature - input_aggressive_mode_overrun) >= ref_temp %}
+            {% set mode = 'off' %}
+          {% endif %}
         {% endif %}
 
         {% set valve_mode = iif(mode == 'off' and dont_turn_off, current_valve_mode, mode) %}
@@ -2886,15 +2927,14 @@ variables:
         {% if mode != 'off' %}
 
           {% if is_aggressive_mode and not is_aggressive_mode_calibration %}
+            {% set temp_diff_heat = valve_temp - ref_temp + input_aggressive_mode_overrun %}
+            {% set temp_diff_cool = valve_temp - ref_temp - input_aggressive_mode_overrun %}
 
-            {% set temp_diff = valve_temp - ref_temp %}
-
-            {% if temp_diff * factor < input_aggressive_mode_range * -1 %}
-              {% set valve_temp = valve_temp - input_aggressive_mode_offset * factor %}
-            {% elif temp_diff * factor > input_aggressive_mode_range %}
-              {% set valve_temp = valve_temp + input_aggressive_mode_offset * factor %}
+            {% if factor == 1 and temp_diff_heat >= input_aggressive_mode_range %}
+              {% set valve_temp = valve_temp + input_aggressive_mode_offset %}
+            {% elif factor == -1 and temp_diff_cool <= input_aggressive_mode_range %}
+              {% set valve_temp = valve_temp - input_aggressive_mode_offset %}
             {% endif %}
-
           {% endif %}
 
           {% if input_calibration_generic %}
